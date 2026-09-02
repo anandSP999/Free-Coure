@@ -1,0 +1,6 @@
+{
+  "name": "Gen-Z Gravity",
+  "description": "Student learning and course exploration portal with real-time video chapters, assessments, certificates, invoices, and progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
