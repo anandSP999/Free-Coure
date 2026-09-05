@@ -1,9 +1,14 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -11,8 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -20,12 +24,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.CertificateDialog
 import com.example.ui.components.PaymentDialog
 import com.example.ui.components.TaxInvoiceDialog
 import com.example.ui.screens.*
 import com.example.ui.theme.*
+import com.example.util.NotificationHelper
 import com.example.viewmodel.PortalTab
 import com.example.viewmodel.PortalViewModel
 
@@ -36,8 +42,26 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        NotificationHelper.createNotificationChannel(applicationContext)
+
         setContent {
             MyApplicationTheme {
+                // Request Notification Permission at Startup (Android 13+)
+                val context = LocalContext.current
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { isGranted ->
+                    // Notification permission response handled
+                }
+
+                LaunchedEffect(Unit) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
+
                 PortalApp(viewModel = viewModel)
             }
         }
@@ -55,8 +79,10 @@ fun PortalApp(viewModel: PortalViewModel) {
             isSignUpMode = uiState.isSignUpMode,
             isLoading = uiState.isAuthLoading,
             errorMessage = uiState.authError,
+            savedAccounts = uiState.savedAccounts,
+            onSelectSavedAccount = { acc -> viewModel.switchAccount(acc) },
             onToggleAuthMode = { viewModel.toggleAuthMode() },
-            onSubmitAuth = { email, pass -> viewModel.handleAuth(email, pass) },
+            onSubmitAuth = { email, pass, name, mob -> viewModel.handleAuth(email, pass, name, mob) },
             modifier = Modifier.fillMaxSize()
         )
     } else {
@@ -172,6 +198,7 @@ fun PortalApp(viewModel: PortalViewModel) {
                         course = course,
                         chapters = uiState.chapters,
                         activeChapter = uiState.activeChapter,
+                        isChapterLocked = uiState.isChapterLocked,
                         academyProfile = uiState.academyProfile,
                         completedChapterIds = uiState.completedChapterIds,
                         isEnrolled = isEnrolled,
@@ -233,6 +260,10 @@ fun PortalApp(viewModel: PortalViewModel) {
                         PortalTab.PROFILE -> {
                             ProfileScreen(
                                 userProfile = uiState.currentUser,
+                                savedAccounts = uiState.savedAccounts,
+                                onSwitchAccount = { acc -> viewModel.switchAccount(acc) },
+                                onRemoveAccount = { email -> viewModel.removeAccount(email) },
+                                onAddAnotherAccount = { viewModel.logout() },
                                 onUpdateProfile = { name, mob, ctx -> viewModel.updateProfile(name, mob, ctx) },
                                 onLogout = { viewModel.logout() },
                                 modifier = Modifier.fillMaxSize()

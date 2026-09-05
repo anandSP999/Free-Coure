@@ -3,12 +3,12 @@ package com.example.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,6 +29,10 @@ import com.example.ui.theme.*
 @Composable
 fun ProfileScreen(
     userProfile: UserProfile?,
+    savedAccounts: List<UserProfile>,
+    onSwitchAccount: (UserProfile) -> Unit,
+    onRemoveAccount: (String) -> Unit,
+    onAddAnotherAccount: () -> Unit,
     onUpdateProfile: (fullName: String, mobile: String, Context) -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
@@ -47,20 +52,147 @@ fun ProfileScreen(
 
         Column {
             Text(
-                text = "My Profile",
+                text = "My Profile & Accounts",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             Text(
-                text = "Keep your details updated so Admins can reach out easily.",
+                text = "Manage your active session and easily switch between saved accounts.",
                 fontSize = 13.sp,
                 color = TextSecondary,
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
 
-        // Profile Details Card
+        // Account Switcher Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.People, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Saved Accounts (${savedAccounts.size.coerceAtLeast(1)})",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+
+                    TextButton(onClick = onAddAnotherAccount) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = BluePrimary)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Account", fontSize = 12.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // List of saved accounts
+                savedAccounts.forEach { acc ->
+                    val isActive = acc.email.equals(userProfile?.email, ignoreCase = true)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isActive) BlueAccent else Color(0xFFF8FAFC)
+                        ),
+                        border = if (isActive) CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(BluePrimary)) else null
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isActive) BluePrimary else BorderGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = acc.fullName.take(1).uppercase(),
+                                    color = if (isActive) Color.White else TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = acc.fullName,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = TextPrimary
+                                    )
+                                    if (isActive) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            color = GreenSuccess,
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Active",
+                                                color = Color.White,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = acc.email,
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+
+                            if (!isActive) {
+                                Button(
+                                    onClick = { onSwitchAccount(acc) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = BluePrimary),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text("Switch", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                IconButton(
+                                    onClick = { onRemoveAccount(acc.email) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = RedDanger, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Active Profile Details Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -72,7 +204,6 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(18.dp)
             ) {
-                // Email Display Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 14.dp)
@@ -80,7 +211,7 @@ fun ProfileScreen(
                     Icon(Icons.Default.AccountCircle, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
-                        Text("Logged in Email", fontSize = 11.sp, color = TextSecondary)
+                        Text("Current Logged In Email", fontSize = 11.sp, color = TextSecondary)
                         Text(
                             text = userProfile?.email ?: "user@example.com",
                             fontSize = 14.sp,
@@ -203,7 +334,7 @@ fun ProfileScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(6.dp))
                         .clickable {
-                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:support@eduportal.com"))
+                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:support@genzgravity.com"))
                             try { context.startActivity(intent) } catch (e: Exception) { /* ignore */ }
                         }
                         .padding(vertical = 4.dp),
@@ -212,7 +343,7 @@ fun ProfileScreen(
                     Icon(Icons.Default.Mail, contentDescription = null, tint = YellowText, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Email: support@eduportal.com",
+                        text = "Email: support@genzgravity.com",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = YellowText
@@ -232,7 +363,7 @@ fun ProfileScreen(
         ) {
             Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Logout 🚪", fontWeight = FontWeight.Bold)
+            Text("Logout Current Account 🚪", fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(100.dp))

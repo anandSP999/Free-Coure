@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +39,7 @@ fun CourseDetailScreen(
     course: Course,
     chapters: List<Chapter>,
     activeChapter: Chapter?,
+    isChapterLocked: Boolean,
     academyProfile: AcademyProfile?,
     completedChapterIds: List<Long>,
     isEnrolled: Boolean,
@@ -68,7 +70,7 @@ fun CourseDetailScreen(
         contentPadding = PaddingValues(top = 10.dp, bottom = 90.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Top Bar (Back Button + Title)
+        // Top Navigation Bar
         item {
             Row(
                 modifier = Modifier
@@ -103,20 +105,70 @@ fun CourseDetailScreen(
             }
         }
 
-        // Active Video Player
+        // Active Video Player or Locked Container
         if (activeChapter != null) {
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    VideoPlayerView(
-                        videoUrl = activeChapter.videoUrl,
-                        watermarkEmail = watermarkEmail,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (isChapterLocked) {
+                        // Locked Video Card
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(210.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = DarkNavy),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Locked",
+                                    tint = YellowWarning,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "🔒 Premium Video Locked",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "This chapter is locked for enrolled members only. Unlock full course access to watch.",
+                                    color = Color.LightGray,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Button(
+                                    onClick = onOpenPayment,
+                                    colors = ButtonDefaults.buttonColors(containerColor = GreenSuccess),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("🔓 Unlock Full Course (₹$totalPrice)", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    } else {
+                        // Real Unlocked Video Player
+                        VideoPlayerView(
+                            videoUrl = activeChapter.videoUrl,
+                            watermarkEmail = watermarkEmail,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Now Playing: ${activeChapter.chapterTitle}",
+                        text = "Now Selected: ${activeChapter.chapterTitle}",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -125,7 +177,7 @@ fun CourseDetailScreen(
             }
         }
 
-        // About the Author / Notes Box
+        // About Course Provider & Instructor
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -135,7 +187,7 @@ fun CourseDetailScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "About the Author",
+                        text = "Instructor & Academy",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = BluePrimary
@@ -160,35 +212,43 @@ fun CourseDetailScreen(
                         Divider(color = BorderGray)
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val noteText = activeChapter.notes
-                                    if (noteText.startsWith("http")) {
-                                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(noteText))
-                                        try { context.startActivity(browserIntent) } catch (e: Exception) { /* ignore */ }
+                        if (isChapterLocked) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Lock, contentDescription = null, tint = YellowText, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Notes locked for enrolled students.", fontSize = 12.sp, color = TextSecondary)
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val noteText = activeChapter.notes
+                                        if (noteText.startsWith("http")) {
+                                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(noteText))
+                                            try { context.startActivity(browserIntent) } catch (e: Exception) { /* ignore */ }
+                                        }
                                     }
-                                }
-                        ) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("📝 Study Notes: ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text(
-                                text = if (activeChapter.notes.startsWith("http")) "View Material ↗" else activeChapter.notes,
-                                fontSize = 12.sp,
-                                color = BluePrimary,
-                                fontWeight = FontWeight.Medium
-                            )
+                            ) {
+                                Icon(Icons.Default.MenuBook, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("📝 Study Notes: ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text(
+                                    text = if (activeChapter.notes.startsWith("http")) "View Material ↗" else activeChapter.notes,
+                                    fontSize = 12.sp,
+                                    color = BluePrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Chapter Action Buttons (Mark Complete / Take Quiz)
-        if (activeChapter != null) {
+        // Chapter Action Buttons (Only enabled when unlocked)
+        if (activeChapter != null && !isChapterLocked) {
             val isCurrentChapterCompleted = completedChapterIds.contains(activeChapter.id)
 
             item {
@@ -219,35 +279,38 @@ fun CourseDetailScreen(
             }
         }
 
-        // Quiz Box (if active)
-        if (currentQuiz != null) {
+        // Quiz Container
+        if (currentQuiz != null && !isChapterLocked) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFDFDFD)),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, BorderGray, RoundedCornerShape(12.dp))
                             .padding(16.dp)
                     ) {
-                        Text("Skill Assessment", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = BluePrimary)
+                        Text(
+                            text = "Chapter Knowledge Check",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BluePrimary
+                        )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
                             text = currentQuiz.question,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        // Quiz Options
                         currentQuiz.options.forEachIndexed { index, option ->
                             val isSelected = selectedQuizOption == index
                             Surface(
@@ -357,9 +420,10 @@ fun CourseDetailScreen(
                     ) {
                         Text("Unlock Full Course Access", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = YellowText)
                         Text(
-                            text = "Pay once to unlock all premium videos, assessments, and the verified certificate for this entire course.",
+                            text = "Pay once to unlock all premium videos, study materials, and the verified certificate for this entire course.",
                             fontSize = 12.sp,
                             color = TextSecondary,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier.padding(vertical = 6.dp)
                         )
                         Button(
@@ -391,7 +455,6 @@ fun CourseDetailScreen(
             val isCompleted = completedChapterIds.contains(ch.id)
             val isCurrentActive = activeChapter?.id == ch.id
 
-            // Youtube Thumbnail extractor
             val videoThumb = rememberThumbnail(ch.videoUrl)
 
             Card(
@@ -435,7 +498,7 @@ fun CourseDetailScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.5f)),
+                                    .background(Color.Black.copy(alpha = 0.55f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -473,11 +536,17 @@ fun CourseDetailScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
                                 shape = RoundedCornerShape(3.dp),
-                                color = if (ch.type.equals("Free", ignoreCase = true)) GreenLight else BlueLight
+                                color = if (ch.type.equals("Free", ignoreCase = true)) GreenLight else if (isEnrolled) GreenLight else BlueLight
                             ) {
                                 Text(
-                                    text = if (ch.type.equals("Free", ignoreCase = true)) "Free Preview" else "Premium Video",
-                                    color = if (ch.type.equals("Free", ignoreCase = true)) GreenDark else BlueDark,
+                                    text = if (ch.type.equals("Free", ignoreCase = true)) {
+                                        "Free Preview"
+                                    } else if (isEnrolled) {
+                                        "Unlocked"
+                                    } else {
+                                        "Locked • ₹${ch.price ?: "0"}"
+                                    },
+                                    color = if (ch.type.equals("Free", ignoreCase = true) || isEnrolled) GreenDark else BlueDark,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

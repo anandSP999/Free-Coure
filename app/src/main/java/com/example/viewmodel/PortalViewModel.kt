@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
 import com.example.data.supabase.SupabaseService
+import com.example.util.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,7 @@ data class PortalUiState(
     val authError: String? = null,
     val isSignUpMode: Boolean = false,
     val currentUser: UserProfile? = null,
+    val savedAccounts: List<UserProfile> = emptyList(),
     val activeTab: PortalTab = PortalTab.EXPLORE,
     val banners: List<Banner> = emptyList(),
     val courses: List<Course> = emptyList(),
@@ -32,22 +34,23 @@ data class PortalUiState(
     val favoriteCourseIds: Set<Long> = emptySet(),
     val enrollments: List<Enrollment> = emptyList(),
     val isLoadingCourses: Boolean = false,
-    
+
     // Course Detail & Player View
     val activeCourse: Course? = null,
     val chapters: List<Chapter> = emptyList(),
     val activeChapter: Chapter? = null,
+    val isChapterLocked: Boolean = false,
     val academyProfile: AcademyProfile? = null,
     val completedChapterIds: List<Long> = emptyList(),
     val isLoadingCourseDetail: Boolean = false,
-    
+
     // Quiz View
     val currentQuiz: Quiz? = null,
     val selectedQuizOption: Int = -1,
     val quizResult: String? = null,
     val isQuizCorrect: Boolean? = null,
     val isQuizLoading: Boolean = false,
-    
+
     // Payment Dialog
     val showPaymentModal: Boolean = false,
     val originalPrice: Int = 0,
@@ -56,12 +59,12 @@ data class PortalUiState(
     val couponMessage: String? = null,
     val isCouponSuccess: Boolean? = null,
     val isApplyingCoupon: Boolean = false,
-    
+
     // Certificate Dialog
     val showCertificateModal: Boolean = false,
     val certificateStudentName: String = "",
     val certificateId: String = "",
-    
+
     // Tax Invoice Dialog
     val showInvoiceModal: Boolean = false,
     val selectedInvoiceEnrollment: Enrollment? = null,
@@ -72,6 +75,7 @@ data class PortalUiState(
 class PortalViewModel(application: Application) : AndroidViewModel(application) {
 
     private val supabase = SupabaseService(application.applicationContext)
+    private val appPrefs = application.getSharedPreferences("portal_app_meta", Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(PortalUiState())
     val uiState: StateFlow<PortalUiState> = _uiState.asStateFlow()
@@ -82,24 +86,32 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun checkInitialSession() {
         val savedUser = supabase.getSavedUser()
+        val savedAccounts = supabase.getSavedAccounts()
         if (savedUser != null) {
             _uiState.update {
                 it.copy(
                     isLoggedIn = true,
                     currentUser = savedUser,
+                    savedAccounts = savedAccounts,
                     favoriteCourseIds = supabase.getFavorites(savedUser.email)
                 )
             }
             loadDashboardData()
+        } else {
+            _uiState.update {
+                it.copy(
+                    savedAccounts = savedAccounts
+                )
+            }
         }
     }
 
-    // ---------------- AUTH ACTIONS ----------------
+    // ---------------- AUTH ACTIONS & ACCOUNT SWITCHING ----------------
     fun toggleAuthMode() {
         _uiState.update { it.copy(isSignUpMode = !it.isSignUpMode, authError = null) }
     }
 
-    fun handleAuth(email: String, pass: String) {
+    fun handleAuth(email: String, pass: String, fullName: String = "Student", mobile: String = "N/A") {
         if (email.isBlank() || pass.isBlank()) {
             _uiState.update { it.copy(authError = "Please enter both email and password") }
             return
@@ -108,17 +120,19 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _uiState.update { it.copy(isAuthLoading = true, authError = null) }
             val result = if (_uiState.value.isSignUpMode) {
-                supabase.signUp(email.trim(), pass)
+                supabase.signUp(email.trim(), pass, fullName, mobile)
             } else {
                 supabase.signIn(email.trim(), pass)
             }
 
             result.onSuccess { user ->
+                val allAccounts = supabase.getSavedAccounts()
                 _uiState.update {
                     it.copy(
                         isLoggedIn = true,
                         isAuthLoading = false,
                         currentUser = user,
+                        savedAccounts = allAccounts,
                         favoriteCourseIds = supabase.getFavorites(user.email),
                         authError = null
                     )
@@ -135,10 +149,49 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun switchAccount(user: UserProfile) {
+        val switched = supabase.switchToAccount(user.email)
+        if (switched != null) {
+            val allAccounts = supabase.getSavedAccounts()
+            _uiState.update {
+                it.copy(
+                    isLoggedIn = true,
+                    currentUser = switched,
+                    savedAccounts = allAccounts,
+                    favoriteCourseIds = supabase.getFavorites(switched.email),
+                    activeCourse = null,
+                    activeChapter = null
+                )
+            }
+            loadDashboardData()
+        }
+    }
+
+    fun removeAccount(email: String) {
+        supabase.removeSavedAccount(email)
+        val remainingAccounts = supabase.getSavedAccounts()
+        val current = supabase.getSavedUser()
+        if (current != null) {
+            _uiState.update {
+                it.copy(
+                    currentUser = current,
+                    savedAccounts = remainingAccounts,
+                    favoriteCourseIds = supabase.getFavorites(current.email)
+                )
+            }
+            loadDashboardData()
+        } else {
+            _uiState.update {
+                PortalUiState(isLoggedIn = false, currentUser = null, savedAccounts = remainingAccounts)
+            }
+        }
+    }
+
     fun logout() {
         supabase.logout()
+        val accounts = supabase.getSavedAccounts()
         _uiState.update {
-            PortalUiState(isLoggedIn = false, currentUser = null)
+            PortalUiState(isLoggedIn = false, currentUser = null, savedAccounts = accounts)
         }
     }
 
@@ -162,6 +215,17 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             val courses = supabase.fetchCourses()
             val enrollments = supabase.fetchEnrollments(email)
             val favs = supabase.getFavorites(email)
+            val accounts = supabase.getSavedAccounts()
+
+            // Check if any new course was added by admin
+            val knownIds = appPrefs.getStringSet("known_course_ids", emptySet()) ?: emptySet()
+            if (knownIds.isNotEmpty()) {
+                val newCourse = courses.find { !knownIds.contains(it.id.toString()) }
+                if (newCourse != null) {
+                    NotificationHelper.sendCourseAddedNotification(getApplication(), newCourse.title)
+                }
+            }
+            appPrefs.edit().putStringSet("known_course_ids", courses.map { it.id.toString() }.toSet()).apply()
 
             _uiState.update {
                 it.copy(
@@ -169,6 +233,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                     courses = courses,
                     enrollments = enrollments,
                     favoriteCourseIds = favs,
+                    savedAccounts = accounts,
                     isLoadingCourses = false
                 )
             }
@@ -243,6 +308,9 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _uiState.update { it.copy(enrollments = updatedEnrollments) }
             }
 
+            val firstChapter = chapters.firstOrNull()
+            val isFirstChapterLocked = firstChapter != null && !isEnrolled && firstChapter.type.equals("Paid", ignoreCase = true)
+
             _uiState.update {
                 it.copy(
                     chapters = chapters,
@@ -251,8 +319,8 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                     originalPrice = totalCoursePrice,
                     discountedPrice = totalCoursePrice,
                     isLoadingCourseDetail = false,
-                    // Auto-select first chapter for convenience
-                    activeChapter = chapters.firstOrNull()
+                    activeChapter = firstChapter,
+                    isChapterLocked = isFirstChapterLocked
                 )
             }
         }
@@ -263,6 +331,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 activeCourse = null,
                 activeChapter = null,
+                isChapterLocked = false,
                 currentQuiz = null,
                 quizResult = null,
                 selectedQuizOption = -1
@@ -278,7 +347,15 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         val isLocked = !isEnrolled && chapter.type.equals("Paid", ignoreCase = true)
 
         if (isLocked) {
-            Toast.makeText(context, "🔒 This video is locked. Unlock full course access below.", Toast.LENGTH_LONG).show()
+            _uiState.update {
+                it.copy(
+                    activeChapter = chapter,
+                    isChapterLocked = true,
+                    currentQuiz = null,
+                    quizResult = null
+                )
+            }
+            Toast.makeText(context, "🔒 This chapter is locked. Enroll to unlock video & materials.", Toast.LENGTH_SHORT).show()
             openPaymentModal()
             return
         }
@@ -286,6 +363,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 activeChapter = chapter,
+                isChapterLocked = false,
                 currentQuiz = null,
                 quizResult = null,
                 selectedQuizOption = -1
@@ -437,6 +515,8 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(showPaymentModal = false) }
         Toast.makeText(context, "⏳ Request Sent! Admin will verify payment and grant full course access.", Toast.LENGTH_LONG).show()
 
+        NotificationHelper.sendPurchaseNotification(getApplication(), course.title, isApproved = false)
+
         viewModelScope.launch {
             supabase.requestEnrollment(email, course.title, price, "Pending")
             val user = _uiState.value.currentUser
@@ -480,7 +560,8 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             val success = supabase.saveProfile(email, fullName.trim(), mobile.trim())
             if (success) {
                 val updatedUser = UserProfile(email, fullName.trim(), mobile.trim())
-                _uiState.update { it.copy(currentUser = updatedUser) }
+                val accounts = supabase.getSavedAccounts()
+                _uiState.update { it.copy(currentUser = updatedUser, savedAccounts = accounts) }
                 Toast.makeText(context, "Profile Updated Successfully! 💾", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "Failed to update profile", Toast.LENGTH_SHORT).show()

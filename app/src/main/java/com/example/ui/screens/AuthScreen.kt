@@ -4,17 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.UserProfile
 import com.example.ui.theme.*
 
 @Composable
@@ -31,12 +32,16 @@ fun AuthScreen(
     isSignUpMode: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
+    savedAccounts: List<UserProfile>,
+    onSelectSavedAccount: (UserProfile) -> Unit,
     onToggleAuthMode: () -> Unit,
-    onSubmitAuth: (email: String, pass: String) -> Unit,
+    onSubmitAuth: (email: String, pass: String, fullName: String, mobile: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("") }
+    var mobile by remember { mutableStateOf("") }
 
     Box(
         modifier = modifier
@@ -57,7 +62,7 @@ fun AuthScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(28.dp),
+                    .padding(26.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Brand Icon & Title
@@ -78,7 +83,7 @@ fun AuthScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Gen-Z Gravity",
@@ -88,12 +93,65 @@ fun AuthScreen(
                 )
 
                 Text(
-                    text = if (isSignUpMode) "Create Student Account" else "Student Login",
-                    fontSize = 18.sp,
+                    text = if (isSignUpMode) "Create Student Account" else "Student Portal Login",
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
+
+                // Quick Login if saved accounts exist
+                if (savedAccounts.isNotEmpty() && !isSignUpMode) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Text(
+                            text = "Saved Accounts on this Device:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        savedAccounts.take(3).forEach { acc ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .clickable { onSelectSavedAccount(acc) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = BlueAccent
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(BluePrimary),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = acc.fullName.take(1).uppercase(),
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(acc.fullName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Text(acc.email, fontSize = 11.sp, color = TextSecondary)
+                                    }
+                                    Icon(Icons.Default.Login, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
 
                 if (!errorMessage.isNullOrBlank()) {
                     Card(
@@ -116,6 +174,49 @@ fun AuthScreen(
                     }
                 }
 
+                // Full Name (Only on Sign Up)
+                if (isSignUpMode) {
+                    OutlinedTextField(
+                        value = fullName,
+                        onValueChange = { fullName = it },
+                        label = { Text("Full Name") },
+                        placeholder = { Text("Ganesh Sharma") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = BluePrimary) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("auth_fullname_input"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = BorderGray
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Mobile Number
+                    OutlinedTextField(
+                        value = mobile,
+                        onValueChange = { mobile = it },
+                        label = { Text("Mobile Number") },
+                        placeholder = { Text("+91 9876543210") },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = BluePrimary) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("auth_mobile_input"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = BorderGray
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 // Email Input
                 OutlinedTextField(
                     value = email,
@@ -134,7 +235,7 @@ fun AuthScreen(
                     )
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Password Input
                 OutlinedTextField(
@@ -155,15 +256,15 @@ fun AuthScreen(
                     )
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
                 // Submit Button
                 Button(
-                    onClick = { onSubmitAuth(email, password) },
+                    onClick = { onSubmitAuth(email, password, fullName, mobile) },
                     enabled = !isLoading,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(50.dp)
                         .testTag("auth_submit_btn"),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
@@ -176,14 +277,14 @@ fun AuthScreen(
                         )
                     } else {
                         Text(
-                            text = if (isSignUpMode) "Sign Up Now" else "Sign In",
+                            text = if (isSignUpMode) "Create Account & Access" else "Sign In",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Toggle Auth Mode Text
                 Text(
